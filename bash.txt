@@ -1,0 +1,1627 @@
+PART 1 — Creating Logfiles and Appending Data Automatically
+1. Create a logfile and append data repeatedly
+
+Suppose you want to maintain a file called activity.log and keep adding entries whenever something happens.
+
+Method 1: Append a line manually
+echo "Script executed successfully" >> activity.log
+
+The >> operator appends data to the end of the file.
+
+Compare:
+
+Operator	Behaviour
+>	Creates a file or overwrites its existing contents
+>>	Creates a file if necessary, then appends to it
+<	Reads input from a file
+2>	Redirects error output to a file
+2>>	Appends error output to a file
+&>	Redirects standard output and standard error to a file in Bash
+2>&1	Redirects standard error to wherever standard output currently goes
+
+Remember: If you want to preserve previous entries, use >>, not >.
+
+Method 2: Automatically add timestamps
+
+Suppose you want every entry to contain the date and time.
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Script executed" >> activity.log
+
+Example output:
+
+2026-10-27 08:30:15 - Script executed
+2026-10-27 08:31:20 - Script executed
+2026-10-27 08:35:42 - Script executed
+
+Each execution appends a new entry.
+
+Method 3: Create a reusable logging function
+
+Instead of repeatedly writing the timestamp command, define a function.
+
+Create logger.sh:
+
+#!/bin/bash
+
+LOGFILE="activity.log"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $*" >> "$LOGFILE"
+}
+
+log "Program started"
+log "Reading configuration"
+log "Processing data"
+log "Program completed"
+
+Run it:
+
+bash logger.sh
+
+Your logfile will contain:
+
+2026-10-27 08:30:15 - Program started
+2026-10-27 08:30:15 - Reading configuration
+2026-10-27 08:30:15 - Processing data
+2026-10-27 08:30:15 - Program completed
+
+The function log() accepts a message and appends it to the logfile.
+
+Notice the use of "$*" and "$LOGFILE".
+
+Quoting variables helps prevent problems with spaces and shell word splitting.
+
+A slightly more robust version:
+
+#!/bin/bash
+
+LOGFILE="activity.log"
+
+log() {
+    printf '[%s] %s\n' \
+        "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOGFILE"
+}
+
+log "Application started"
+log "User logged in"
+log "Application terminated"
+
+Using printf gives you more predictable formatting than echo.
+
+2. Log successful and failed commands
+
+Suppose you are running a backup script and want to record whether the backup succeeded.
+
+#!/bin/bash
+
+LOGFILE="backup.log"
+
+if tar -czf backup.tar.gz project/; then
+    echo "$(date '+%F %T') - Backup successful" >> "$LOGFILE"
+else
+    echo "$(date '+%F %T') - Backup failed" >> "$LOGFILE"
+fi
+
+Here, if evaluates the exit status of tar.
+
+Exit status 0 means success.
+A nonzero exit status indicates failure.
+
+This is better than simply logging that a command was executed: you are recording its result.
+
+Capture both output and errors in a logfile
+#!/bin/bash
+
+LOGFILE="script.log"
+
+python3 process.py >> "$LOGFILE" 2>&1
+
+This appends both normal output and error messages to the logfile.
+
+If you want to record when the operation starts and finishes:
+
+#!/bin/bash
+
+LOGFILE="script.log"
+
+echo "[$(date '+%F %T')] Started" >> "$LOGFILE"
+
+if python3 process.py >> "$LOGFILE" 2>&1; then
+    echo "[$(date '+%F %T')] SUCCESS" >> "$LOGFILE"
+else
+    status=$?
+    echo "[$(date '+%F %T')] FAILED with exit code $status" >> "$LOGFILE"
+fi
+
+Important: $? contains the exit status of the most recently executed command. That's why we save it immediately inside else.
+
+3. Append log entries automatically at regular intervals
+
+Suppose you want to record the current date and time every minute.
+
+#!/bin/bash
+
+while true; do
+    echo "$(date '+%F %T') - System check performed" >> system.log
+    sleep 60
+done
+
+Run:
+
+bash monitor.sh
+
+It will append a line every 60 seconds until you stop it with Ctrl+C.
+
+This is a basic monitoring loop.
+
+Better approach: Use cron for scheduled scripts
+
+If you want a script to run every five minutes, you can schedule it instead of keeping an infinite loop running.
+
+Open your user's crontab:
+
+crontab -e
+
+Add:
+
+*/5 * * * * /home/alan/check_system.sh >> /home/alan/system.log 2>&1
+
+This runs the script every five minutes and appends its output and errors to the logfile.
+
+Use absolute paths in cron jobs because cron may start with a different working directory and a smaller environment than your interactive shell.
+
+To list your scheduled jobs:
+
+crontab -l
+
+To remove a scheduled job, edit the crontab and delete its entry.
+
+Note: Cron is suitable for scheduled execution. If you need a continuously running service, consider a systemd service and timer instead. WSL environments may require additional configuration for services and cron to run as expected.
+
+4. Log every command executed by a Bash script
+
+At the top of a script, you can use:
+
+#!/bin/bash
+
+set -x
+
+echo "Starting"
+mkdir -p output
+touch output/result.txt
+
+set +x
+
+echo "Finished"
+
+set -x prints commands as Bash executes them.
+
+This is useful when debugging scripts.
+
+To save the trace to a separate file:
+
+#!/bin/bash
+
+exec 19>debug.log
+BASH_XTRACEFD=19
+PS4='+ ${BASH_SOURCE}:${LINENO}: '
+
+set -x
+
+echo "Starting"
+ls /tmp
+
+set +x
+
+This sends the execution trace to debug.log instead of mixing it with ordinary terminal output.
+
+Security warning: Don't enable command tracing around passwords, access tokens, or other secrets. Traces can expose sensitive values.
+
+5. A practical logging template for future scripts
+
+You can reuse this template in most of your Bash programs.
+
+#!/bin/bash
+
+LOGFILE="application.log"
+
+log() {
+    printf '[%s] [%s] %s\n' \
+        "$(date '+%F %T')" "$1" "$2" >> "$LOGFILE"
+}
+
+log INFO "Application started"
+
+if [[ -f "input.txt" ]]; then
+    log INFO "Input file found"
+else
+    log ERROR "Input file not found"
+    exit 1
+fi
+
+log INFO "Processing completed"
+
+Example logfile:
+
+[2026-10-27 08:30:00] [INFO] Application started
+[2026-10-27 08:30:00] [INFO] Input file found
+[2026-10-27 08:30:01] [INFO] Processing completed
+
+Now that you know how to log operations, let's move on to Bash programming problems.
+
+PART 2 — Bash Scripting: From Fundamentals to Challenging Problems
+
+I'll organise these by topic and increase the difficulty as we go.
+
+For each exercise, I'll give you the problem statement and the concepts involved. This way, you can actually practise writing the scripts instead of merely copying solutions.
+
+The final section contains integrated challenges that combine several concepts.
+
+Section A — Variables, Input, Arithmetic and Conditions
+Question 1: Calculator
+
+Write a Bash script that accepts two numbers and an operator (+, -, *, /, %).
+
+Requirements:
+
+Read both numbers from the user.
+Read the operator.
+Perform the appropriate calculation.
+Handle division by zero.
+Display an error for an unsupported operator.
+
+Concepts: read, case, arithmetic expansion, conditions.
+
+Challenge: Support decimal numbers as well. Bash arithmetic alone doesn't support floating-point calculations, so you'll need another tool such as awk.
+
+Question 2: Student grade calculator
+
+Read a student's marks out of 100 and assign a grade.
+
+Use these rules:
+
+Marks	Grade
+90–100	O
+80–89	A+
+70–79	A
+60–69	B+
+50–59	B
+0–49	F
+Anything outside 0–100	Invalid input
+
+Requirements:
+
+Reject negative marks.
+Reject marks greater than 100.
+Display the grade using if, elif, and else.
+
+Challenge: Extend it to accept marks for five subjects, calculate the average, and assign the grade based on the average.
+
+Question 3: Leap year checker
+
+Read a year and determine whether it is a leap year.
+
+Rules:
+
+Divisible by 400 → leap year.
+Otherwise, divisible by 100 → not a leap year.
+Otherwise, divisible by 4 → leap year.
+Otherwise → not a leap year.
+
+Challenge: Reject invalid year input and handle the calculation without writing a complicated nested structure.
+
+Question 4: Electricity bill calculator
+
+Calculate a household's electricity bill using the following hypothetical tariff:
+
+Units consumed	Rate per unit
+First 100 units	₹2
+Next 100 units	₹3
+Next 300 units	₹5
+Above 500 units	₹7
+
+The rates apply progressively to each slab.
+
+For example, 250 units would cost:
+
+First 100: ₹200
+Next 100: ₹300
+Remaining 50: ₹250
+
+Total: ₹750.
+
+Requirements:
+
+Accept the number of units consumed.
+Calculate the bill using the appropriate slabs.
+Reject negative input.
+
+Challenge: Add a fixed charge of ₹100 and a 5% surcharge if the bill exceeds ₹1,000.
+
+Question 5: Menu-driven utility
+
+Create a menu:
+
+1. Display current date
+2. Display current directory
+3. List files
+4. Display disk usage
+5. Search for a file
+6. Exit
+
+Use case to execute the selected operation.
+
+Challenge: Keep displaying the menu until the user chooses Exit. Handle invalid menu selections without terminating the program.
+
+Question 6: Number classification
+
+Read an integer and determine whether it is:
+
+Positive, negative, or zero.
+Even or odd.
+Divisible by 3 and 5.
+Prime or composite.
+
+Challenge: Perform all four classifications in a single script. Remember that 0 and 1 are not prime numbers.
+
+Section B — Loops and Number Problems
+
+These exercises help you become comfortable with for, while, until, and nested loops.
+
+Question 7: Multiplication table
+
+Read a number and display its multiplication table up to a user-specified limit.
+
+Example:
+
+Enter number: 7
+Enter limit: 5
+
+7 x 1 = 7
+7 x 2 = 14
+7 x 3 = 21
+7 x 4 = 28
+7 x 5 = 35
+
+Challenge: Generate tables for every number in a specified range.
+
+Question 8: Factorial
+
+Calculate the factorial of a nonnegative integer.
+
+Example:
+
+Input: 5
+Output: 120
+
+Challenge: Calculate the factorial using both a loop and a recursive function. Account for the limitations of Bash integer arithmetic.
+
+Question 9: Fibonacci series
+
+Read n and print the first n Fibonacci numbers.
+
+Example:
+
+Input: 7
+Output: 0 1 1 2 3 5 8
+
+Challenge: Print all Fibonacci numbers up to a specified limit instead of specifying the number of terms.
+
+Question 10: Armstrong number
+
+Determine whether a number is an Armstrong number.
+
+For a three-digit number, the sum of the cubes of its digits must equal the number.
+
+Example:
+
+153 = 1³ + 5³ + 3³
+
+Challenge: Generalise the solution to numbers with any number of digits.
+
+Question 11: Reverse a number
+
+Read an integer and reverse its digits.
+
+Example:
+
+Input: 12345
+Output: 54321
+
+Challenge: Handle negative numbers and leading zeros correctly. Note that leading zeros disappear when the result is interpreted as an integer.
+
+Question 12: Prime numbers in a range
+
+Read two integers L and R, then print every prime number between them.
+
+Example:
+
+L = 10
+R = 30
+
+11 13 17 19 23 29
+
+Challenge: Optimise the prime-checking loop by testing divisors only up to the square root of each candidate.
+
+Question 13: Digit statistics
+
+Read an integer and calculate:
+
+Number of digits.
+Sum of digits.
+Product of digits.
+Largest digit.
+Smallest digit.
+
+Challenge: Identify whether the number is a palindrome without converting the entire operation into an external command.
+
+Question 14: Pattern generation
+
+Print the following pattern for n = 5:
+
+*
+**
+***
+****
+*****
+
+Then generate:
+
+    *
+   ***
+  *****
+ *******
+*********
+
+Challenge: Print a hollow pyramid and a diamond.
+
+Question 15: GCD and LCM
+
+Read two integers and calculate their greatest common divisor and least common multiple.
+
+Use the Euclidean algorithm for the GCD.
+
+Challenge: Handle negative inputs and the case where either number is zero.
+
+Section C — Array Manipulation
+
+Bash arrays are useful for small datasets, collections of filenames, lists of arguments, and command-line utilities.
+
+Create an indexed array like this:
+
+numbers=(10 20 30 40 50)
+
+Useful operations:
+
+Operation	Syntax
+Access an element	${numbers[0]}
+Display all elements	${numbers[@]}
+Display array indices	${!numbers[@]}
+Get the number of elements	${#numbers[@]}
+Append an element	numbers+=(60)
+Change an element	numbers[1]=25
+Remove an element	unset 'numbers[2]'
+
+Remember that Bash arrays are indexed from zero, and removing an element does not automatically renumber the remaining indices.
+
+Question 16: Array statistics
+
+Read n integers into an array and calculate:
+
+Sum.
+Average.
+Minimum.
+Maximum.
+
+Challenge: Do this without sorting the array.
+
+Question 17: Reverse an array
+
+Given:
+
+numbers=(10 20 30 40 50)
+
+Produce:
+
+50 40 30 20 10
+
+Challenge: Reverse the array in place, without creating a second array.
+
+Question 18: Remove duplicates
+
+Read a list of integers and remove duplicate values while preserving the original order.
+
+Input:
+
+10 20 10 30 20 40 10
+
+Output:
+
+10 20 30 40
+
+Challenge: Implement the solution using an associative array as a set.
+
+Question 19: Second-largest distinct element
+
+Find the second-largest distinct number in an array.
+
+Input:
+
+10 50 30 50 40
+
+Output:
+
+40
+
+If there aren't at least two distinct values, print an appropriate message.
+
+Challenge: Solve it in one pass without sorting the array.
+
+Question 20: Array rotation
+
+Rotate an array to the right by k positions.
+
+Input:
+
+Array: 1 2 3 4 5
+k = 2
+
+Output:
+
+4 5 1 2 3
+
+Challenge: Handle cases where k is greater than the array length.
+
+Question 21: Merge two sorted arrays
+
+Input:
+
+A = 1 4 7 10
+B = 2 3 8 12
+
+Output:
+
+1 2 3 4 7 8 10 12
+
+Challenge: Merge the arrays in linear time without sorting the combined result.
+
+Question 22: Find missing and repeated elements
+
+An array should contain each integer from 1 to n exactly once, but one number is missing and another occurs twice.
+
+Example:
+
+1 2 3 3 5
+
+Output:
+
+Missing: 4
+Repeated: 3
+
+Challenge: Solve it without sorting the array.
+
+Question 23: Frequency counting
+
+Given:
+
+apple banana apple orange banana apple
+
+Print the frequency of each word.
+
+Example:
+
+apple 3
+banana 2
+orange 1
+
+Challenge: Sort the output alphabetically by word, or by descending frequency.
+
+Question 24: Find pairs with a target sum
+
+Given an array and a target value, find all distinct pairs whose sum equals the target.
+
+Input:
+
+Array: 2 7 11 15 3 6
+Target: 9
+
+Output:
+
+2 7
+3 6
+
+Challenge: Avoid printing duplicate pairs.
+
+Section D — String Manipulation
+
+Bash is particularly useful for processing filenames, command output, simple records, and configuration values.
+
+Question 25: Reverse a string
+
+Input:
+
+Hello World
+
+Output:
+
+dlroW olleH
+
+Challenge: Preserve spaces and punctuation.
+
+Question 26: Count vowels, consonants, digits and spaces
+
+Read a string and count:
+
+Vowels.
+Consonants.
+Digits.
+Whitespace characters.
+Special characters.
+
+Challenge: Handle uppercase letters and punctuation correctly.
+
+Question 27: Palindrome checker
+
+Check whether a string is a palindrome.
+
+Example:
+
+Input: Madam
+Output: Palindrome
+
+For the basic version, ignore case.
+
+For the advanced version, ignore spaces and punctuation as well.
+
+Example:
+
+A man, a plan, a canal: Panama!
+
+This should be recognised as a palindrome after normalisation.
+
+Question 28: Word frequency
+
+Read a sentence and count how many times each word occurs.
+
+Example:
+
+Linux is powerful and Linux is flexible
+
+Output:
+
+linux 2
+is 2
+powerful 1
+and 1
+flexible 1
+
+Challenge: Make the result case-insensitive and ignore punctuation.
+
+Question 29: Replace every occurrence of a substring
+
+Read:
+
+A filename.
+An old word.
+A replacement word.
+
+Replace all occurrences of the old word with the replacement.
+
+Example:
+
+Old: localhost
+New: 127.0.0.1
+
+Challenge: Process the file line by line and write the result to a different file, preserving the original.
+
+For general-purpose text replacement, sed is usually more reliable than Bash's parameter expansion.
+
+Question 30: Validate an email address
+
+Write a script that checks whether an email address follows a reasonable basic format.
+
+Examples:
+
+alan@example.com       Valid
+alan.example.com       Invalid
+alan@                  Invalid
+@example.com           Invalid
+
+Challenge: Validate the basic structure using a Bash regular expression, while recognising that a regular expression cannot establish whether an address actually exists or accepts mail.
+
+Question 31: Find the longest word
+
+Given a sentence, identify the longest word and its length.
+
+Example:
+
+Bash scripting automates repetitive tasks
+
+Output:
+
+repetitive
+10
+
+Challenge: If several words have the same maximum length, print all of them.
+
+Question 32: Filename extension analyser
+
+Read a directory path and count the number of files belonging to each extension.
+
+Example:
+
+.py  12
+.txt  8
+.sh   5
+.csv  3
+
+Challenge: Handle hidden files, files without extensions, and filenames containing multiple dots.
+
+Question 33: Password strength checker
+
+Read a password without displaying it on the terminal.
+
+Check whether it contains:
+
+At least eight characters.
+An uppercase letter.
+A lowercase letter.
+A digit.
+A special character.
+
+Challenge: Print which requirements are missing without revealing the password.
+
+Use read -s to suppress terminal echo when accepting the password interactively.
+
+Section E — Matrices Using Bash Arrays
+
+Bash does not provide native two-dimensional arrays in the same way as C or Python. You can represent matrices using indexed arrays, associative arrays, or a one-dimensional array with calculated indices.
+
+For learning purposes, a one-dimensional array is a straightforward option.
+
+For a matrix with rows rows and cols columns, map element (i, j) to:
+
+index=$((i * cols + j))
+
+Then access the element using:
+
+value=${matrix[index]}
+Question 34: Matrix addition
+
+Read two matrices of dimensions m × n and calculate their sum.
+
+Example:
+
+A:
+1 2
+3 4
+
+B:
+5 6
+7 8
+
+Output:
+
+6 8
+10 12
+Question 35: Matrix subtraction
+
+Read two matrices of the same dimensions and calculate A - B.
+
+Challenge: Reject incompatible dimensions.
+
+Question 36: Matrix multiplication
+
+Read matrices A and B.
+
+If A has dimensions m × n, then B must have dimensions n × p.
+
+The result has dimensions m × p.
+
+Example:
+
+A:
+1 2
+3 4
+
+B:
+5 6
+7 8
+
+Output:
+
+19 22
+43 50
+
+Challenge: Implement matrix multiplication using three nested loops.
+
+Question 37: Matrix transpose
+
+Read a matrix and display its transpose.
+
+Example:
+
+1 2 3
+4 5 6
+
+Output:
+
+1 4
+2 5
+3 6
+Question 38: Matrix diagonal calculations
+
+For a square matrix, calculate:
+
+Main diagonal sum.
+Secondary diagonal sum.
+Sum of all elements.
+Sum of each row.
+Sum of each column.
+
+Challenge: Determine whether the matrix is symmetric.
+
+A matrix is symmetric if:
+
+$$ A_{ij}=A_{ji} $$
+
+for all valid indices \(i,j\).
+
+Question 39: Matrix search
+
+Read a matrix and a target value. Find its position.
+
+Example:
+
+Matrix:
+1 2 3
+4 5 6
+7 8 9
+
+Target: 5
+
+Output:
+
+Found at row 2, column 2
+
+This example uses one-based row and column numbering for display.
+
+Challenge: Print every occurrence if the value appears more than once.
+
+Question 40: Matrix rotation
+
+Rotate a square matrix 90 degrees clockwise.
+
+Input:
+
+1 2 3
+4 5 6
+7 8 9
+
+Output:
+
+7 4 1
+8 5 2
+9 6 3
+
+Challenge: Perform the rotation in place.
+
+Section F — Conditional Statements and case
+
+You asked specifically for if, elif, else, and switch-style questions.
+
+Bash uses case rather than a traditional C-style switch statement.
+
+Question 41: Day-of-week converter
+
+Read an integer from 1 to 7 and print the corresponding day.
+
+Use case.
+
+Challenge: Allow the user to choose whether numbering starts with Sunday or Monday.
+
+Question 42: Month and number of days
+
+Read a month number and print the number of days in that month.
+
+Challenge: Ask for the year and handle leap years for February.
+
+Question 43: Triangle classification
+
+Read three side lengths.
+
+Determine whether they form a valid triangle.
+
+If valid, classify it as:
+
+Equilateral.
+Isosceles.
+Scalene.
+
+Challenge: Also determine whether the triangle is right-angled.
+
+Question 44: Quadratic equation solver
+
+Read coefficients a, b, and c for:
+
+$$ ax^2+bx+c=0 $$
+
+Calculate the discriminant:
+
+$$ D=b^2-4ac $$
+
+Determine whether the equation has:
+
+Two distinct real roots.
+One repeated real root.
+Two complex roots.
+
+Challenge: Handle the case where a = 0, which makes the equation linear rather than quadratic.
+
+For floating-point roots, use awk or another tool that supports decimal arithmetic.
+
+Question 45: Income tax calculator
+
+Create a tax calculator using a hypothetical progressive tax structure.
+
+Annual income	Tax rate
+First ₹3,00,000	0%
+Next ₹3,00,000	5%
+Next ₹4,00,000	10%
+Remaining income	20%
+
+Challenge: Calculate the tax progressively rather than applying the final slab's rate to the entire income.
+
+Question 46: Login simulator
+
+Create a login script that:
+
+Accepts a username.
+Accepts a password without displaying it.
+Compares them against predefined test credentials.
+Allows at most three attempts.
+Logs successful and unsuccessful attempts.
+
+Challenge: Prevent the password from appearing in the logfile.
+
+For real applications, don't store plaintext passwords in scripts. Use proper authentication mechanisms.
+
+Section G — File Reading, Processing and Writing
+
+Now we're moving into the sort of Bash automation that is especially useful for DevOps.
+
+The standard pattern is:
+
+Read a file.
+Extract or validate data.
+Process it.
+Write the result to another file.
+Log the operation.
+Question 47: Read a file and count its contents
+
+Write a script that reads input.txt and calculates:
+
+Number of lines.
+Number of words.
+Number of characters.
+
+Write the results to report.txt.
+
+Challenge: Handle an empty file and a missing file separately.
+
+Question 48: Copy only matching lines
+
+Read input.txt and copy only lines containing the word ERROR into errors.txt.
+
+Challenge: Count how many lines were copied and record the count in a separate summary file.
+
+Question 49: Remove duplicate lines
+
+Read a file, remove duplicate lines, and write the unique lines to unique.txt.
+
+Challenge: Preserve the order in which lines first appeared.
+
+For example:
+
+Input:
+
+apple
+banana
+apple
+orange
+banana
+grape
+
+Output:
+
+apple
+banana
+orange
+grape
+
+You can solve this using Bash's associative arrays or a tool such as awk.
+
+Question 50: Student marks processor
+
+Suppose students.csv contains:
+
+Name,Department,Marks
+Alan,CSE,95
+John,ECE,82
+Mary,CSE,88
+David,ECE,45
+
+Write a script that:
+
+Reads each student record.
+Calculates the grade.
+Writes the original information and grade to results.csv.
+Calculates the class average.
+Counts the number of passing and failing students.
+Appends a summary to summary.log.
+
+Example output:
+
+Name,Department,Marks,Grade
+Alan,CSE,95,O
+John,ECE,82,A+
+Mary,CSE,88,A+
+David,ECE,45,F
+
+Challenge: Calculate the average marks for each department.
+
+Assume names and departments do not contain commas for the basic version. Proper CSV parsing requires more care if fields can contain quoted commas.
+
+Question 51: Inventory manager
+
+Read inventory records from a file:
+
+Laptop 10 50000
+Mouse 50 500
+Keyboard 20 1500
+Monitor 8 12000
+
+The columns represent product, quantity, and unit price.
+
+Calculate:
+
+Total inventory value.
+Product with the highest quantity.
+Product with the highest unit price.
+Products with fewer than 10 units.
+Total number of units across all products.
+
+Write the results to inventory_report.txt.
+
+Challenge: Read a second file containing new stock arrivals and update the inventory quantities.
+
+Question 52: File-based employee database
+
+Suppose employees.txt contains:
+
+101 Alan CSE 45000
+102 John ECE 40000
+103 Mary CSE 55000
+104 David IT 60000
+
+Create a menu-driven program that can:
+
+Display all employees.
+Search by employee ID.
+Add an employee.
+Update an employee's salary.
+Delete an employee.
+Display employees whose salaries exceed a specified amount.
+Exit.
+
+Challenge: Ensure that updates don't accidentally overwrite unrelated records. Write to a temporary file and replace the original only after successful processing.
+
+This is a miniature file-based database application.
+
+Question 53: Logfile analyser
+
+Given a logfile containing entries such as:
+
+2026-10-27 08:30:01 INFO Application started
+2026-10-27 08:30:03 ERROR Database connection failed
+2026-10-27 08:30:05 WARNING Memory usage high
+2026-10-27 08:30:07 ERROR Request timeout
+2026-10-27 08:30:10 INFO Application recovered
+
+Write a script that:
+
+Counts INFO, WARNING, and ERROR entries.
+Extracts all error messages.
+Finds the most common error message.
+Writes a report to log_report.txt.
+Appends a timestamped summary to analysis.log.
+
+Challenge: Accept the logfile path as a command-line argument and handle a nonexistent file gracefully.
+
+Question 54: File organiser
+
+Write a script that scans a directory and organises files into folders according to their extensions.
+
+Example:
+
+project/
+├── Python/
+├── Text/
+├── Images/
+└── Other/
+
+Requirements:
+
+Python files go into Python/.
+.txt files go into Text/.
+Image files go into Images/.
+Other files go into Other/.
+
+Challenge: Prevent overwriting files with identical names and create a logfile recording every move.
+
+Test this on a temporary directory before using it on real files.
+
+Question 55: Configuration file editor
+
+Suppose config.ini contains:
+
+server=localhost
+port=8080
+debug=true
+
+Write a script that:
+
+Reads the configuration.
+Displays its values.
+Allows the user to modify the server, port, or debug setting.
+Writes the updated configuration to a file.
+Keeps a backup of the previous configuration.
+
+Challenge: Update only the requested setting without duplicating keys or modifying unrelated settings.
+
+Section H — Command-Line Arguments and Functions
+
+A useful Bash script should work with arguments instead of requiring every value to be entered interactively.
+
+Question 56: Command-line calculator
+
+Write a script that accepts three arguments:
+
+./calculator.sh 10 + 20
+
+Expected output:
+
+30
+
+Requirements:
+
+Check that exactly three arguments are provided.
+Validate the operator.
+Handle division by zero.
+
+Challenge: Support decimal calculations and meaningful error messages.
+
+Question 57: File statistics utility
+
+Create a script called fileinfo.sh.
+
+Usage:
+
+./fileinfo.sh document.txt
+
+It should display:
+
+File size.
+Number of lines.
+Number of words.
+Number of characters.
+Last modification time.
+File type.
+
+Challenge: Support multiple filenames in one invocation.
+
+Question 58: Backup utility
+
+Create a script that accepts a source directory and a backup directory.
+
+./backup.sh project/ backups/
+
+Requirements:
+
+Verify that the source exists.
+Create the backup directory if necessary.
+Generate a timestamped archive.
+Record success or failure in a logfile.
+
+Challenge: Reject invalid paths and prevent an incomplete backup from being treated as successful.
+
+Question 59: Reusable validation functions
+
+Create functions to validate:
+
+An integer.
+A file path.
+A directory path.
+A port number.
+A percentage from 0 to 100.
+
+Use these functions in other programs.
+
+Challenge: Write a function that returns a result using its exit status rather than relying on global variables.
+
+In Bash, return is for exit statuses, not arbitrary data values. To return strings or numbers, use standard output, variable assignment techniques, or another suitable interface.
+
+Question 60: Argument parser
+
+Build a command-line utility supporting:
+
+./tool.sh --input data.txt --output report.txt --verbose
+
+Requirements:
+
+Accept named options.
+Reject unknown options.
+Require an input filename.
+Use a default output filename if none is specified.
+Enable additional messages when --verbose is present.
+
+Challenge: Support --help, --version, and short options such as -i and -o.
+
+Section I — Advanced Bash Challenges
+
+These problems combine arrays, file operations, conditions, logging, and command execution.
+
+Question 61: Directory synchronisation report
+
+Given two directories, identify:
+
+Files present only in the first directory.
+Files present only in the second directory.
+Files present in both but with different contents.
+Files that are identical.
+
+Challenge: Compare files recursively and handle filenames containing spaces.
+
+Hints: find, relative paths, diff, sha256sum.
+
+Question 62: Disk usage alert system
+
+Write a script that checks filesystem usage.
+
+Requirements:
+
+Read disk usage information.
+Identify filesystems exceeding 80% usage.
+Log warnings with timestamps.
+Display a summary of affected mount points.
+
+Challenge: Accept a configurable threshold and prevent duplicate warnings from flooding the logfile.
+
+Hints: df, awk, date, grep.
+
+Question 63: Automated service health checker
+
+Create a script that checks whether a service or application is running.
+
+Requirements:
+
+Check whether a specified port is listening.
+Attempt a connection if appropriate.
+Record the result.
+Retry a specified number of times.
+Exit with a nonzero status if all attempts fail.
+
+Challenge: Add a configurable timeout and distinguish between a failed connection and an invalid configuration.
+
+Hints: ss, curl, timeout, exit statuses.
+
+Question 64: CSV data analyser
+
+Given a dataset containing:
+
+Product,Category,Quantity,Price
+Laptop,Electronics,5,50000
+Mouse,Accessories,20,500
+Keyboard,Accessories,10,1500
+Monitor,Electronics,5,12000
+
+Generate a report containing:
+
+Total number of records.
+Total quantity sold.
+Total sales revenue.
+Highest-revenue product.
+Highest-quantity product.
+Revenue by category.
+Products whose revenue exceeds the average product revenue.
+
+Challenge: Sort the report by revenue descending and write the output to a new CSV file.
+
+Hints: awk, sort, printf, associative arrays.
+
+Question 65: Batch file processor with error handling
+
+Write a script that processes every .txt file in a specified directory.
+
+For each file:
+
+Count the number of lines.
+Remove blank lines.
+Remove duplicate lines.
+Write the cleaned result to an output directory.
+Record the original and cleaned line counts.
+Log success or failure.
+
+Challenge: Continue processing other files even if one file fails, and return a nonzero exit status if any file fails.
+
+Be careful to distinguish between preserving the original order and sorting the contents before removing duplicates.
+
+Question 66: Task scheduler simulator
+
+Create a Bash program that reads tasks from a file:
+
+Backup 5
+DatabaseCheck 2
+ReportGeneration 8
+Cleanup 3
+
+The second column represents each task's priority.
+
+Requirements:
+
+Sort tasks by priority.
+Execute them in that order.
+Log start and completion times.
+Record failures without stopping the entire program.
+
+Challenge: Add a maximum execution time per task and support a configurable number of retries.
+
+For the first version, use simulated tasks rather than executing arbitrary commands from the file.
+
+Question 67: Process monitor
+
+Build a simple process-monitoring script.
+
+Requirements:
+
+Accept a process name.
+Check whether it is running.
+Record the PID if available.
+Log when the process is missing.
+Run periodically until stopped.
+
+Challenge: Track state transitions so that the script logs an outage once and then logs recovery when the process returns, instead of recording the same warning every few seconds.
+
+Question 68: File integrity monitor
+
+Create a program that records SHA-256 hashes for files in a directory.
+
+On later executions, compare the current hashes with the saved manifest.
+
+Detect:
+
+Newly created files.
+Deleted files.
+Modified files.
+
+Challenge: Handle filenames containing spaces and avoid modifying the baseline automatically when unexpected changes are detected.
+
+This is a simplified version of a file-integrity monitoring tool.
+
+Question 69: Student record management system
+
+Create a complete menu-driven Bash program using a file as its database.
+
+Support:
+
+Add a student.
+Search by roll number.
+Update marks.
+Delete a record.
+Display all students.
+Sort by marks.
+Calculate class average.
+Display the top three students.
+Export a report.
+Maintain an audit logfile.
+
+Challenge: Validate all inputs, reject duplicate roll numbers, preserve data when an update fails, and handle empty files.
+
+Question 70: Mini shell utility
+
+Create a program that accepts commands such as:
+
+list
+search filename
+count file.txt
+largest 10
+recent 7
+report
+exit
+
+The program should execute the corresponding file-management operation.
+
+Requirements:
+
+Display a menu or command prompt.
+Validate arguments.
+Execute the appropriate function.
+Display errors without crashing.
+Log each operation.
+
+Challenge: Support command history and configuration settings.
+
+Keep the command set restricted to explicitly implemented operations rather than evaluating arbitrary user input with eval.
+
+PART 3 — Three Complete Bash Programs to Study
+
+Let's finish with three actual programs, so you can see how the concepts fit together.
+
+Program 1: Grade calculator with logging
+
+This program reads marks for five subjects, calculates the average, assigns a grade, and appends the result to a logfile.
+
+#!/bin/bash
+
+LOGFILE="grades.log"
+
+read -r -p "Enter student name: " name
+
+marks=()
+total=0
+
+for ((i = 1; i <= 5; i++)); do
+    while true; do
+        read -r -p "Enter marks for subject $i: " mark
+
+        if [[ "$mark" =~ ^[0-9]+$ ]] && (( mark <= 100 )); then
+            marks+=("$mark")
+            total=$((total + mark))
+            break
+        else
+            echo "Invalid marks. Enter an integer between 0 and 100."
+        fi
+    done
+done
+
+average=$((total / 5))
+
+if (( average >= 90 )); then
+    grade="O"
+elif (( average >= 80 )); then
+    grade="A+"
+elif (( average >= 70 )); then
+    grade="A"
+elif (( average >= 60 )); then
+    grade="B+"
+elif (( average >= 50 )); then
+    grade="B"
+else
+    grade="F"
+fi
+
+echo
+echo "Student: $name"
+echo "Total: $total"
+echo "Average (integer): $average"
+echo "Grade: $grade"
+
+printf '[%s] Name=%s Total=%d Average=%d Grade=%s\n' \
+    "$(date '+%F %T')" "$name" "$total" "$average" "$grade" \
+    >> "$LOGFILE"
+
+echo "Result appended to $LOGFILE"
+
+Concepts used: Arrays, loops, input validation, arithmetic, conditional statements, logging, and formatted output.
+
+The average is an integer because Bash arithmetic is integer-based. If you want decimal averages, you can use awk.
+
+Program 2: File analyser and report generator
+
+This program reads a text file, counts its lines, words, and characters, and writes a report.
+
+#!/bin/bash
+
+read -r -p "Enter input filename: " input
+
+if [[ ! -f "$input" ]]; then
+    echo "Error: File does not exist."
+    exit 1
+fi
+
+read -r lines words chars < <(wc -l -w -m < "$input")
+
+report="report.txt"
+
+{
+    echo "File Analysis Report"
+    echo "--------------------"
+    echo "Filename: $input"
+    echo "Lines: $lines"
+    echo "Words: $words"
+    echo "Characters: $chars"
+    echo "Generated: $(date '+%F %T')"
+} > "$report"
+
+echo "Report generated: $report"
+
+Notice this line:
+
+read -r lines words chars < <(wc -l -w -m < "$input")
+
+It uses process substitution (<(...)) to provide the output of wc as input to read.
+
+The report uses > because this program creates a fresh report each time. If you wanted to maintain a history of reports in the same file, you would use >> instead.
+
+Program 3: Find large files and log them
+
+This program searches a directory for files larger than a specified size and appends the results to a logfile.
+
+#!/bin/bash
+
+read -r -p "Enter directory: " directory
+read -r -p "Minimum size in MB: " size
+
+if [[ ! -d "$directory" ]]; then
+    echo "Error: Invalid directory."
+    exit 1
+fi
+
+if [[ ! "$size" =~ ^[0-9]+$ ]] || (( size < 1 )); then
+    echo "Error: Size must be a positive integer."
+    exit 1
+fi
+
+LOGFILE="large_files.log"
+
+echo "[$(date '+%F %T')] Searching $directory for files larger than ${size}MB" \
+    >> "$LOGFILE"
+
+find "$directory" -type f -size +"${size}"M -print |
+while IFS= read -r file; do
+    filesize=$(du -h "$file" | awk '{print $1}')
+
+    printf '[%s] %s | Size: %s\n' \
+        "$(date '+%F %T')" "$file" "$filesize" >> "$LOGFILE"
+
+    printf '%s | %s\n' "$file" "$filesize"
+done
+
+echo "Results appended to $LOGFILE"
+
+Concepts used: Input validation, directory checks, find, pipes, loops, awk, file redirection, and logging.
+
+One improvement for production scripts would be to handle unusual filenames robustly using find -print0 and a NUL-delimited loop. The version above is suitable for ordinary filenames but can mishandle filenames containing newline characters.
+
+PART 4 — How I'd Practise These
+
+Rather than attempting all 70 exercises at once, I'd divide them into four stages.
+
+Stage	Exercises	Goal
+1. Fundamentals	1–15	Conditions, loops, arithmetic, and case
+2. Data structures	16–40	Arrays, strings, and matrices
+3. File automation	41–60	Input validation, records, file processing, and logging
+4. Advanced automation	61–70	Monitoring, integrity checks, error handling, and integrated utilities
+
+One small recommendation: write each script in a separate file and test it with several inputs, including invalid input, empty files, missing files, and unexpected values.
+
+For example:
+
+mkdir -p bash-practice
+cd bash-practice
+
+touch grades.sh arrays.sh matrix.sh file_analyser.sh log_monitor.sh
+
+chmod +x *.sh
+
+Then execute a script using:
+
+./grades.sh
+
+For debugging, use:
+
+bash -x grades.sh
+
+And to check Bash syntax without executing the script:
+
+bash -n grades.sh
