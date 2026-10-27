@@ -1,0 +1,959 @@
+
+1. Text Processing and Data Manipulation
+These are some of the most useful commands to learn: sort, uniq, cut, awk, sed, tr, paste, and join.
+
+Imagine you have a file named students.txt:
+
+Alan CSE 95
+John ECE 82
+David CSE 88
+Alan CSE 95
+Mary ECE 91
+Peter CSE 76
+1.1 Sort the contents of a file
+Sort alphabetically:
+
+sort students.txt
+Sort in reverse order:
+
+sort -r students.txt
+Sort numerically:
+
+Suppose marks.txt contains:
+
+100
+25
+9
+80
+sort -n marks.txt
+Output:
+
+9
+25
+80
+100
+Without -n, numbers are sorted lexicographically, so 100 could appear before 25.
+
+Sort by a particular column:
+
+sort -k3,3n students.txt
+Sort by the third column, numerically, in ascending order.
+
+To sort in descending order:
+
+sort -k3,3nr students.txt
+Sort by file size:
+
+du -ah . | sort -h
+This displays files and directories with human-readable sizes, sorted from smallest to largest.
+
+For largest first:
+
+du -ah . | sort -hr
+Here, -h allows human-readable numbers such as 1K, 20M, and 2G to be sorted correctly.
+
+1.2 Remove duplicate lines
+Suppose names.txt contains:
+
+Alan
+John
+Alan
+Mary
+John
+Peter
+Remove consecutive duplicate lines:
+
+uniq names.txt
+Important: uniq only removes adjacent duplicates.
+
+Remove all duplicate lines:
+
+sort -u names.txt
+Or:
+
+sort names.txt | uniq
+Display only duplicated lines:
+
+sort names.txt | uniq -d
+Count how many times each line appears:
+
+sort names.txt | uniq -c
+Example output:
+
+      2 Alan
+      2 John
+      1 Mary
+      1 Peter
+Find the most frequently occurring lines:
+
+sort names.txt | uniq -c | sort -nr
+This is useful for finding repeated IP addresses in logs, frequently occurring errors, duplicate records, or the most common commands in a dataset.
+
+1.3 Extract specific columns using cut
+Suppose students.csv contains:
+
+Alan,CSE,95
+John,ECE,82
+David,CSE,88
+Extract the first column:
+
+cut -d',' -f1 students.csv
+Output:
+
+Alan
+John
+David
+Extract the first and third columns:
+
+cut -d',' -f1,3 students.csv
+Extract everything after a particular character position:
+
+cut -c5- students.txt
+This extracts characters starting at position 5 through the end of each line.
+
+When should you use cut?
+
+Use it when your data has a simple, consistent delimiter, such as commas, colons, or tabs.
+
+For complex CSV files containing quoted commas, use a CSV-aware tool such as Python's csv module instead.
+
+1.4 Calculate totals, averages, and statistics using awk
+This is where Linux gets interesting.
+
+Suppose sales.txt contains:
+
+Laptop 50000 2
+Mouse 500 10
+Keyboard 1500 5
+Monitor 12000 3
+The columns represent:
+
+Product
+
+Price
+
+Quantity
+
+Calculate the total of the second column:
+
+awk '{sum += $2} END {print sum}' sales.txt
+Output:
+
+64000
+Calculate total revenue:
+
+awk '{revenue += $2 * $3} END {print revenue}' sales.txt
+Output:
+
+123500
+Calculate the average price:
+
+awk '{sum += $2; count++} END {if (count) print sum/count}' sales.txt
+Find the maximum value in the second column:
+
+awk 'NR==1 || $2>max {max=$2} END {print max}' sales.txt
+Print rows where the price exceeds 1,000:
+
+awk '$2 > 1000' sales.txt
+Print only products whose quantity exceeds 3:
+
+awk '$3 > 3 {print $1, $3}' sales.txt
+Calculate the total for a specific category:
+
+Suppose the file contains:
+
+Alan CSE 95
+John ECE 82
+David CSE 88
+Mary ECE 91
+Calculate the total marks of CSE students:
+
+awk '$2 == "CSE" {sum += $3} END {print sum}' students.txt
+Output:
+
+183
+Calculate totals grouped by category:
+
+awk '{sum[$2] += $3} END {for (group in sum) print group, sum[group]}' students.txt
+Possible output:
+
+CSE 183
+ECE 173
+The output order isn't guaranteed because awk doesn't necessarily iterate through its associative array in sorted order.
+
+To sort the result:
+
+awk '{sum[$2] += $3} END {for (group in sum) print group, sum[group]}' students.txt | sort
+Why learn awk?
+
+Because it can perform a surprising amount of data analysis directly in your terminal. It is particularly useful for processing structured text, extracting metrics, and analysing logs.
+
+2. Search for Files and Directories Like a Pro
+You probably already know find, but its real power comes from combining conditions.
+
+2.1 Find files by name
+Find every file named config.ini under the current directory:
+
+find . -type f -name "config.ini"
+Find Python files:
+
+find . -type f -name "*.py"
+Find files regardless of filename capitalization:
+
+find . -type f -iname "*.jpg"
+This matches .jpg, .JPG, .Jpg, and similar variations.
+
+Find both Python and shell scripts:
+
+find . -type f \( -name "*.py" -o -name "*.sh" \)
+Find files whose names contain config:
+
+find . -type f -iname "*config*"
+2.2 Find files larger than a specified size
+Find files larger than 100 MB:
+
+find . -type f -size +100M
+Find files smaller than 10 KB:
+
+find . -type f -size -10k
+Find files between 50 MB and 200 MB:
+
+find . -type f -size +50M -size -200M
+Find files larger than 100 MB and display their sizes:
+
+find . -type f -size +100M -exec ls -lh {} \;
+Here:
+
+-exec runs a command on every matching file.
+
+{} represents the current file.
+
+\; terminates the command.
+
+2.3 Find files modified recently
+Find files modified within the last 24 hours:
+
+find . -type f -mtime -1
+Find files modified more than seven days ago:
+
+find . -type f -mtime +7
+Find files modified within the last 30 minutes:
+
+find . -type f -mmin -30
+Find files modified after a particular date:
+
+find . -type f -newermt "2026-10-20"
+Find files modified between two dates:
+
+find . -type f -newermt "2026-10-20" ! -newermt "2026-10-25"
+This matches files modified on or after October 20 but before October 25, 2026.
+
+The distinction matters: -mtime works in 24-hour periods, while -newermt lets you specify a calendar date or timestamp.
+
+2.4 Find empty files and directories
+Find empty files:
+
+find . -type f -empty
+Find empty directories:
+
+find . -type d -empty
+Find files with a specific permission pattern:
+
+find . -type f -perm 0777
+This finds files with exactly the specified permission bits.
+
+Be careful about automatically changing permissions across an entire directory tree. A file's permissions should depend on what the file needs to do.
+
+2.5 Find files and perform actions on them
+Delete all .tmp files under a directory:
+
+find . -type f -name "*.tmp" -delete
+Find all .log files and display their sizes:
+
+find . -type f -name "*.log" -exec ls -lh {} +
+Count all Python files:
+
+find . -type f -name "*.py" | wc -l
+Find large log files and show their sizes:
+
+find . -type f -name "*.log" -size +50M -exec du -h {} +
+Important: -delete is destructive. Run the equivalent search without -delete first to inspect what would be removed.
+
+3. Search Inside Files
+This is essential for debugging, especially when you have large projects with dozens of files.
+
+The main command is grep.
+
+3.1 Search for words or patterns
+Find every occurrence of ERROR in a file:
+
+grep "ERROR" application.log
+Ignore capitalization:
+
+grep -i "error" application.log
+Display line numbers:
+
+grep -n "ERROR" application.log
+Search recursively through a directory:
+
+grep -r "TODO" .
+Search recursively and display filenames and line numbers:
+
+grep -rn "TODO" .
+Search only Python files:
+
+grep -rn --include="*.py" "TODO" .
+Search multiple file types:
+
+grep -rn --include="*.py" --include="*.js" "TODO" .
+Exclude a directory:
+
+grep -rn --exclude-dir=node_modules "useState" .
+This is particularly useful in React projects where searching every dependency would produce an enormous amount of irrelevant output.
+
+3.2 Count matching lines
+Count lines containing ERROR:
+
+grep -c "ERROR" application.log
+Note that this counts matching lines, not necessarily every occurrence of the word.
+
+Count occurrences of a word, including multiple occurrences per line:
+
+grep -o "ERROR" application.log | wc -l
+Display lines that do not contain a word:
+
+grep -v "DEBUG" application.log
+Show three lines before and after a match:
+
+grep -C 3 "Exception" application.log
+Find files containing a particular word:
+
+grep -rl "DATABASE_URL" .
+This returns filenames rather than every matching line.
+
+3.3 Combine searches
+Find Python files containing password:
+
+grep -rn --include="*.py" "password" .
+Find files containing either ERROR or FATAL:
+
+grep -En "ERROR|FATAL" application.log
+Find lines beginning with ERROR:
+
+grep '^ERROR' application.log
+Find lines ending with .py:
+
+grep '\.py$' filenames.txt
+Those ^ and $ symbols are regular-expression anchors. They match the beginning and end of a line, respectively.
+
+4. Replace Words Across Files
+You mentioned wanting to replace all occurrences of one word with another. That's the territory of sed.
+
+4.1 Replace text in a file
+Suppose config.txt contains:
+
+server=localhost
+host=localhost
+database=localhost
+Replace the first occurrence on each line:
+
+sed 's/localhost/127.0.0.1/' config.txt
+This prints the modified text to the terminal without changing the original file.
+
+Replace every occurrence on each line:
+
+sed 's/localhost/127.0.0.1/g' config.txt
+The g means global within each line.
+
+Modify the file directly:
+
+sed -i 's/localhost/127.0.0.1/g' config.txt
+On GNU/Linux, -i edits the original file in place.
+
+For a backup before modifying:
+
+sed -i.bak 's/localhost/127.0.0.1/g' config.txt
+This creates a backup named config.txt.bak.
+
+4.2 Replace words across multiple files
+Replace a word in every .txt file in the current directory tree:
+
+find . -type f -name "*.txt" -exec sed -i 's/oldword/newword/g' {} +
+Replace a word only in Python files:
+
+find . -type f -name "*.py" -exec sed -i.bak 's/old_function/new_function/g' {} +
+This creates .bak backups of the original Python files.
+
+Replace a whole word instead of part of a word:
+
+sed 's/\<cat\>/dog/g' file.txt
+On GNU sed, \< and \> denote word boundaries.
+
+For example, this replaces cat without replacing the cat inside category.
+
+Delete lines containing a particular word:
+
+sed '/DEBUG/d' application.log
+Print only lines 10–20:
+
+sed -n '10,20p' application.log
+Delete blank lines:
+
+sed '/^[[:space:]]*$/d' file.txt
+That also removes lines containing only spaces or tabs.
+
+A safety tip
+Before performing a bulk replacement across an entire project, preview the matches:
+
+grep -rn --include="*.py" "old_function" .
+Then test the replacement on one file before applying it everywhere. One overly enthusiastic sed command can give your codebase a very unexpected makeover.
+
+5. Count Lines, Words, Files, and Disk Usage
+These commands are simple but surprisingly powerful.
+
+Using wc
+wc file.txt
+Displays the number of lines, words, and bytes.
+
+Count lines:
+
+wc -l file.txt
+Count words:
+
+wc -w file.txt
+Count bytes:
+
+wc -c file.txt
+Count characters:
+
+wc -m file.txt
+Count all Python source lines in a project:
+
+find . -type f -name "*.py" -exec cat {} + | wc -l
+This includes blank lines and comment lines. It is a rough count, not a measure of executable code.
+
+Using du
+Find the total size of a directory:
+
+du -sh .
+Find sizes of immediate subdirectories:
+
+du -h --max-depth=1 .
+Find the ten largest immediate subdirectories and files:
+
+du -ah --max-depth=1 . | sort -hr | head -n 10
+Find the ten largest files recursively:
+
+find . -type f -exec du -h {} + | sort -hr | head -n 10
+Check filesystem space:
+
+df -h
+Remember the difference:
+
+du measures space used by files and directories.
+
+df reports space usage on mounted filesystems.
+
+6. Pipes, Redirection, and Command Chaining
+This is the point where individual Linux commands become a proper data-processing toolkit.
+
+6.1 Pipes: |
+A pipe sends the output of one command into another.
+
+For example:
+
+cat access.log | grep "404"
+A more direct version is:
+
+grep "404" access.log
+You don't need cat when a command can read the file directly.
+
+Now consider:
+
+grep "404" access.log | wc -l
+This counts the lines containing 404.
+
+Or:
+
+grep "404" access.log | awk '{print $1}' | sort | uniq -c | sort -nr
+Assuming the first column contains IP addresses, this counts how many matching log lines each IP address has and sorts the counts from highest to lowest.
+
+That's a miniature log-analysis pipeline.
+
+6.2 Redirect output
+Save command output to a file, replacing its contents:
+
+ls -l > files.txt
+Append output without deleting existing contents:
+
+date >> files.txt
+Save both standard output and errors:
+
+find / -name "*.conf" > results.txt 2>&1
+This also captures permission errors and other error messages.
+
+Discard error messages:
+
+find / -name "*.conf" 2>/dev/null
+This is useful when searching system directories, although it can hide errors that might otherwise explain missing results.
+
+Send output to both the terminal and a file:
+
+find . -name "*.py" | tee python_files.txt
+Append to a file while displaying output:
+
+date | tee -a timestamps.txt
+6.3 Command chaining
+Run the second command only if the first succeeds:
+
+mkdir reports && cd reports
+Run the second command only if the first fails:
+
+ping -c 1 192.0.2.1 || echo "Ping failed"
+Run commands sequentially regardless of success:
+
+echo "Starting"; date; echo "Finished"
+Run a command and preserve its output and errors in a log:
+
+python3 script.py > output.log 2>&1
+Watch a command's output continuously:
+
+tail -f application.log
+To stop following the file, press Ctrl+C.
+
+7. Compare Files and Find Differences
+These are extremely useful when debugging configuration files, comparing versions, or reviewing generated output.
+
+7.1 Compare two files
+diff file1.txt file2.txt
+Show differences side by side:
+
+diff -y file1.txt file2.txt
+Ignore differences in whitespace:
+
+diff -w file1.txt file2.txt
+Compare files while ignoring capitalization:
+
+diff -i file1.txt file2.txt
+7.2 Compare sorted lists
+Suppose you have two files containing lists of usernames.
+
+comm file1.txt file2.txt
+comm expects the files to be sorted.
+
+Sort them first:
+
+sort file1.txt -o file1.txt
+sort file2.txt -o file2.txt
+comm file1.txt file2.txt
+Be aware that these commands modify the original files. If you don't want that, use temporary files or process substitutions:
+
+comm <(sort file1.txt) <(sort file2.txt)
+The output has three columns:
+
+Entries only in the first file.
+
+Entries only in the second file.
+
+Entries common to both files.
+
+Show only common entries:
+
+comm -12 <(sort file1.txt) <(sort file2.txt)
+Show entries unique to the first file:
+
+comm -23 <(sort file1.txt) <(sort file2.txt)
+This is great for comparing package lists, configuration inventories, and user lists.
+
+8. File Permissions, Ownership, and Metadata
+Beyond chmod and chown, Linux provides several ways to inspect and manipulate file metadata.
+
+8.1 Inspect file information
+Display detailed file metadata:
+
+stat file.txt
+This shows file size, permissions, timestamps, inode information, and more.
+
+Display only the last modification time:
+
+stat -c '%y' file.txt
+Display file size in bytes:
+
+stat -c '%s' file.txt
+Identify the file type:
+
+file filename
+Useful for files without extensions or when a downloaded file's actual type is uncertain.
+
+8.2 Change timestamps
+Update a file's access and modification timestamps to the current time:
+
+touch file.txt
+Create a file if it doesn't exist, without updating the timestamp of an existing file:
+
+touch -c file.txt
+Copy the timestamps from another file:
+
+touch -r reference.txt target.txt
+8.3 Find files owned by a particular user
+find . -type f -user alan
+Find files belonging to a particular group:
+
+find . -type f -group developers
+Find files writable by everyone:
+
+find . -type f -perm -0002
+This is useful when auditing permissions and locating files that may be unnecessarily exposed to modification.
+
+9. Archive, Compress, and Inspect Files
+Since you work with project directories and downloaded files, these are worth knowing.
+
+9.1 Create and extract archives
+Create a compressed archive:
+
+tar -czf project.tar.gz project/
+List the contents of an archive without extracting it:
+
+tar -tzf project.tar.gz
+Extract an archive:
+
+tar -xzf project.tar.gz
+Extract into a particular directory:
+
+tar -xzf project.tar.gz -C /tmp/
+Compress a file using gzip:
+
+gzip file.txt
+This ordinarily replaces file.txt with file.txt.gz.
+
+Decompress it:
+
+gunzip file.txt.gz
+Display a gzip-compressed file without extracting it:
+
+zcat file.txt.gz
+Search inside compressed logs:
+
+zgrep "ERROR" application.log.gz
+This is particularly useful for rotated logs such as application.log.1.gz.
+
+10. Process and System Investigation
+You know Linux already, so let's go beyond just checking running processes.
+
+10.1 Identify processes using a port
+Find which process is listening on port 8080:
+
+sudo ss -ltnp 'sport = :8080'
+Useful for investigating conflicts with Jenkins, development servers, and other applications.
+
+Find processes using a particular file or directory:
+
+sudo lsof /path/to/file
+Find processes listening on network ports:
+
+sudo lsof -i -P -n
+10.2 Inspect running processes
+Find processes whose command lines match a pattern:
+
+pgrep -af python
+Display processes sorted by CPU usage:
+
+ps aux --sort=-%cpu | head -n 10
+Display processes sorted by memory usage:
+
+ps aux --sort=-%mem | head -n 10
+Display a process tree:
+
+pstree -p
+If pstree is not installed, you can install the appropriate psmisc package on Ubuntu.
+
+10.3 Inspect logs using journalctl
+On a system running systemd:
+
+Display recent system logs:
+
+journalctl -n 100
+Display logs for a particular service:
+
+journalctl -u ssh
+Display logs from the current boot:
+
+journalctl -b
+Follow a service's logs live:
+
+journalctl -u ssh -f
+Show logs from the last hour:
+
+journalctl --since "1 hour ago"
+These commands are especially valuable when a service fails to start or behaves differently from what you expect.
+
+11. Generate Reports from Text Files
+Here's where we combine several commands to answer practical questions.
+
+Imagine access.log contains web-server logs.
+
+Find the most common IP addresses
+Assuming the first whitespace-separated field contains the IP address:
+
+awk '{print $1}' access.log | sort | uniq -c | sort -nr | head -n 10
+Count HTTP status codes
+For a typical Apache Combined Log Format file, the status code is often the ninth whitespace-separated field:
+
+awk '{print $9}' access.log | sort | uniq -c | sort -nr
+The exact field position depends on the log format. Check a sample line before relying on it.
+
+Find all errors from the last day
+find . -type f -name "*.log" -mtime -1 -exec grep -nH "ERROR" {} +
+This searches log files modified within the last day for lines containing ERROR.
+
+It doesn't necessarily identify errors that occurred during the last day: a log file may contain older entries. For that, inspect the timestamps inside the logs.
+
+Find the most common error messages
+grep "ERROR" application.log | sort | uniq -c | sort -nr | head -n 10
+This counts identical complete lines, so messages containing different timestamps or request IDs may appear separately.
+
+Count the number of unique IP addresses
+awk '{print $1}' access.log | sort -u | wc -l
+Find duplicate lines in a configuration file
+sort config.txt | uniq -d
+This identifies duplicate lines regardless of where they occur in the original file.
+
+Find files containing a particular configuration value
+grep -rn --include="*.conf" "listen 8080" /etc 2>/dev/null
+This searches .conf files under /etc for the specified text while suppressing permission errors.
+
+Create a list of large files
+find . -type f -size +100M -printf '%s %p\n' | sort -nr > large_files.txt
+This saves matching file sizes in bytes alongside their paths, sorted from largest to smallest.
+
+-printf is supported by GNU find, including the standard GNU version on Ubuntu.
+
+12. More Commands Worth Learning
+Here's a quick reference to additional commands that are useful in day-to-day Linux work.
+
+Command	What it does	Example
+xargs	Converts input into command arguments	cat files.txt | xargs -r wc -l
+tee	Writes output to a file and the terminal	ls | tee files.txt
+rev	Reverses characters in each line	echo "hello" | rev
+tac	Displays lines in reverse order	tac file.txt
+paste	Combines corresponding lines from files	paste names.txt marks.txt
+split	Splits a large file into smaller pieces	split -l 1000 data.txt part_
+shuf	Randomly shuffles lines	shuf names.txt
+nl	Numbers lines	nl -ba file.txt
+column	Formats delimited text into aligned columns	column -t -s ',' data.csv
+basename	Extracts a filename from a path	basename /home/alan/test.py
+dirname	Extracts a directory from a path	dirname /home/alan/test.py
+readlink	Resolves symbolic links and paths	readlink -f script.sh
+realpath	Displays an absolute resolved path	realpath file.txt
+timeout	Stops a command after a time limit	timeout 10s ping -c 100 127.0.0.1
+watch	Repeats a command periodically	watch -n 2 free -h
+tee + grep	Saves matching output while displaying it	grep "ERROR" app.log | tee errors.txt
+cmp	Compares files byte by byte	cmp file1.bin file2.bin
+sha256sum	Computes file checksums	sha256sum file.iso
+xargs -P	Runs multiple jobs in parallel	find . -name "*.txt" | xargs -r -P 4 wc -l
+A few useful details:
+
+xargs needs care when filenames contain spaces, newlines, or special characters. For robust filename handling, use find -print0 with xargs -0, or prefer find -exec when appropriate.
+
+column is great for simple delimited text, but it is not a general-purpose CSV parser.
+
+timeout is useful when testing scripts or commands that might otherwise hang indefinitely.
+
+sha256sum helps verify that a file's contents match an expected checksum.
+
+13. Five Particularly Powerful Combinations
+These are the kinds of commands that make you faster once you understand the individual pieces.
+
+A. Find the 10 largest files in your project
+find . -type f -printf '%s %p\n' | sort -nr | head -n 10
+B. Find the most frequently occurring error lines
+grep "ERROR" application.log | sort | uniq -c | sort -nr | head -n 10
+C. Find all Python files modified today
+find . -type f -name "*.py" -newermt "$(date +%F)"
+This uses today's date at midnight as the starting point.
+
+D. Find all files containing a word, then count the matching files
+grep -rl "TODO" --include="*.py" . | wc -l
+E. Find duplicate filenames in a directory tree
+find . -type f -printf '%f\n' | sort | uniq -d
+This finds filenames that appear more than once, regardless of directory. It doesn't mean the files have identical contents.
+
+To identify files with identical contents, you can use:
+
+find . -type f -exec sha256sum {} + | sort
+Files with the same SHA-256 checksum are candidates for duplicates. You can inspect matching hashes to identify groups of identical-content files.
+
+14. The Next Level: Learn to Think in Pipelines
+The real skill isn't memorising 100 commands. It's learning to combine a handful of tools into new solutions.
+
+For example, suppose you want to answer this question:
+
+"Which Python files in my project were modified in the last seven days, are larger than 10 KB, and contain the word TODO?"
+
+You could combine find, grep, and sort:
+
+find . -type f -name "*.py" -size +10k -mtime -7 -exec grep -l "TODO" {} + | sort
+Or suppose you want to calculate the total sales amount from a file where each line contains a product, its price, and its quantity:
+
+awk '{total += $2 * $3} END {printf "Total sales: ₹%.2f\n", total}' sales.txt
+You don't need to open Excel, write a Python script, or install a data-processing library.
+
+And if the data gets more complex, you can always move to Python, SQL, or a proper data-processing tool. Linux command-line utilities are excellent when the task fits their strengths.
+
+My recommended learning order for you
+Since you already know Linux and work with DevOps tools, I'd learn these in this order:
+
+Priority	Commands	What you'll gain
+1	grep, find, sort, uniq	Search and filter files efficiently
+2	awk, sed, cut, tr	Transform text and perform calculations
+3	xargs, tee, pipes, redirection	Build powerful command pipelines
+4	stat, du, df, find predicates	Inspect files and diagnose storage issues
+5	diff, comm, cmp, sha256sum	Compare files and detect changes
+6	ps, ss, lsof, journalctl	Diagnose processes, ports, and services
+7	tar, gzip, split, timeout	Handle archives, large files, and long-running commands
+One final tip: Learn awk properly. If I had to choose just one command from this entire list for you to master, it would be awk. It can filter records, extract columns, calculate sums and averages, group data, and generate reports—all from the terminal.
+
+Once you get comfortable with awk, grep, find, and pipes, you'll start seeing solutions to problems that previously required opening several applications or writing a script. That's when Linux becomes less of an operating system you use and more of a toolkit you can compose.
+
+Let's say you have a file called students.txt:
+
+Alan CSE 95 20
+John ECE 82 19
+David CSE 88 21
+Mary ECE 95 20
+Peter CSE 88 19
+Sarah CSE 95 19
+
+The columns represent Name Department Marks Age.
+
+1. Sort by multiple columns
+A. Sort by department, then marks
+sort -k2,2 -k3,3nr students.txt
+-k2,2 → Sort by department (column 2).
+-k3,3nr → If departments match, sort marks (column 3) numerically in descending order.
+B. Sort by marks descending, then age ascending
+sort -k3,3nr -k4,4n students.txt
+
+The sorting priority is:
+
+Marks: highest first.
+Age: youngest first when marks are equal.
+C. Sort by department, marks descending, then name alphabetically
+sort -k2,2 -k3,3nr -k1,1 students.txt
+
+You can add as many sorting keys as you need!
+
+The general syntax is:
+
+sort -kCOLUMN_START,COLUMN_END [OPTIONS] file
+
+For example:
+
+sort -k2,2 -k3,3n -k4,4r file.txt
+
+The keys are evaluated in order. The second key matters when the first key compares equal, and the third matters when the first two compare equal.
+
+2. Sort using different criteria for each column
+
+Suppose you have:
+
+Laptop 50000 5
+Mouse 500 20
+Keyboard 1500 10
+Monitor 12000 5
+
+You want to sort by quantity descending, then price ascending.
+
+sort -k3,3nr -k2,2n products.txt
+
+The result would be:
+
+Mouse 500 20
+Keyboard 1500 10
+Monitor 12000 5
+Laptop 50000 5
+
+Notice that Monitor comes before Laptop because both have a quantity of 5, but Monitor has the lower price.
+
+3. Sort a CSV file by multiple columns
+
+Suppose sales.csv contains:
+
+Product,Category,Sales,Quantity
+Laptop,Electronics,50000,5
+Mouse,Accessories,500,20
+Keyboard,Accessories,1500,10
+Monitor,Electronics,12000,5
+
+Sort by category alphabetically, then sales descending:
+
+(head -n 1 sales.csv && tail -n +2 sales.csv | sort -t',' -k2,2 -k3,3nr)
+
+Here:
+
+-t',' specifies a comma as the field delimiter.
+-k2,2 sorts by category.
+-k3,3nr sorts sales numerically in descending order.
+The header is preserved at the top.
+
+Important: This works for simple CSV files. If fields contain quoted commas, use a CSV-aware tool instead.
+
+4. Sort by multiple file attributes
+
+You can also combine file-related criteria.
+
+A. Find files larger than 10 MB, sort by size descending
+find . -type f -size +10M -printf '%s %p\n' | sort -k1,1nr
+B. Sort files by modification time
+ls -lt
+
+Newest first.
+
+Oldest first:
+
+ls -ltr
+C. Find Python files modified recently and sort by size
+find . -type f -name "*.py" -mtime -7 -printf '%s %p\n' | sort -k1,1nr
+
+This lists Python files modified within the last seven days, with the largest first.
+
+5. A useful trick: Specify sorting options per key
+
+Suppose your records look like this:
+
+CSE 90 Alan
+CSE 100 John
+ECE 85 Mary
+CSE 90 David
+
+You want:
+
+Department alphabetically.
+Marks descending numerically.
+Name alphabetically.
+
+Use:
+
+sort -k1,1 -k2,2nr -k3,3 file.txt
+
+One subtle point: GNU sort can apply options globally as well as to individual keys. If you want a key to have specific behavior, putting its options directly after that key makes your intention clearer.
+
+Bonus: Combine sorting with duplicate removal
+
+Sort by department and marks, then remove duplicate complete lines:
+
+sort -k2,2 -k3,3nr students.txt | uniq
+
+Remember that uniq removes adjacent identical lines. If you need to remove duplicate records regardless of their positions, use:
+
+sort -u students.txt
+
+That removes duplicate complete lines, but it doesn't deduplicate records based on selected columns alone.
+
+The key idea
+
+Think of a multi-key sort like a priority list:
+
+sort -k1,1 -k2,2nr -k3,3 file.txt
+
+First criterion → Second criterion → Third criterion.
